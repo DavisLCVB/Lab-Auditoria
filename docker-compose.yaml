@@ -26,6 +26,7 @@ services:
       APP_PREFIX: /certificados
       SESSION_SECRET: ${SESSION_SECRET:-cambiar-antes-de-produccion}
       DATABASE_URL: sqlite:////data/certificados.db
+      SESSION_COOKIE_SECURE: "false"
     volumes:
       - certificados_data:/data
     networks:
