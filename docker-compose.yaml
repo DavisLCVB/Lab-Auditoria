@@ -1,0 +1,73 @@
+version: "3.8"
+
+services:
+  # --- EL PORTERO PRINCIPAL (Nginx Reverse Proxy) ---
+  proxy-maestro:
+    image: nginx:1.27-alpine
+    container_name: sm-proxy-maestro
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx-master.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - gestionalumno-net
+    depends_on:
+      - certificados
+      - sum-web
+      - tramite-legacy
+
+  # --- 1. GESTIÓN DE CERTIFICADOS (Seguro) ---
+  certificados:
+    build: 
+      context: ./Gestion-certificados-Auditoria
+      dockerfile: Dockerfile
+    container_name: sm-certificados
+    environment:
+      APP_PREFIX: /certificados
+      SESSION_SECRET: ${SESSION_SECRET:-cambiar-antes-de-produccion}
+      DATABASE_URL: sqlite:////data/certificados.db
+    volumes:
+      - certificados_data:/data
+    networks:
+      - gestionalumno-net
+
+  # --- 2. SISTEMA ÚNICO DE MATRÍCULA (Vulnerable a SQLi/RCE) ---
+  sum-db:
+    image: mysql:8.0
+    container_name: sm-sum-db
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: matricula
+    volumes:
+      - ./SUM-clone-w-vulns/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - gestionalumno-net
+
+  sum-web:
+    build: 
+      context: ./SUM-clone-w-vulns
+    container_name: sm-sum-web
+    environment:
+      DB_HOST: sum-db
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: matricula
+    depends_on:
+      - sum-db
+    networks:
+      - gestionalumno-net
+
+  # --- 3. TRÁMITE ONLINE (Vulnerable a Info Disclosure / File Upload) ---
+  tramite-legacy:
+    build: 
+      context: ./tramite-legacy
+    container_name: sm-tramite-poc
+    networks:
+      - gestionalumno-net
+
+volumes:
+  certificados_data:
+
+networks:
+  gestionalumno-net:
+    driver: bridge
